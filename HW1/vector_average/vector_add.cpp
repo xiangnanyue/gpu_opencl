@@ -83,11 +83,12 @@ int main()
 //--------------------------------------------------------------------
 const unsigned N = 5000000;
 float *input_a=(float *) malloc(sizeof(float)*N);
-float *input_b=(float *) malloc(sizeof(float)*N);
-float *output= (float *) malloc(sizeof(float)*N);
-float *ref_output=(float *) malloc(sizeof(float)*N);
+//float *input_b=(float *) malloc(sizeof(float)*N);
+float *output= (float *) malloc(sizeof(float));
+//float *ref_output=(float *) malloc(sizeof(float)*N);
+//float *average_output = 0; // add average output
 cl_mem input_a_buf; // num_devices elements
-cl_mem input_b_buf; // num_devices elements
+//cl_mem input_b_buf; // num_devices elements
 cl_mem output_buf; // num_devices elements
 int status;
 
@@ -96,8 +97,8 @@ int status;
 	time (&start);
 	for(unsigned j = 0; j < N; ++j) {
 	      input_a[j] = rand_float();
-	      input_b[j] = rand_float();
-	      ref_output[j] = input_a[j] + input_b[j];
+	      // input_b[j] = rand_float();
+	     *output = input_a[j] + *output;
 	      //printf("ref %f\n",ref_output[j]);
 	    }
 	time (&end);
@@ -133,28 +134,28 @@ int status;
        N* sizeof(float), NULL, &status);
     checkError(status, "Failed to create buffer for input A");
 
-    input_b_buf = clCreateBuffer(context, CL_MEM_READ_ONLY,
-        N* sizeof(float), NULL, &status);
-    checkError(status, "Failed to create buffer for input B");
+//    input_b_buf = clCreateBuffer(context, CL_MEM_READ_ONLY,
+//        N* sizeof(float), NULL, &status);
+//    checkError(status, "Failed to create buffer for input B");
 
     // Output buffer.
     output_buf = clCreateBuffer(context, CL_MEM_WRITE_ONLY,
-        N*sizeof(float), NULL, &status); // change to one dimension
+        sizeof(float), NULL, &status); // change to one dimension
     checkError(status, "Failed to create buffer for output");
 
 
     // Transfer inputs to each device. Each of the host buffers supplied to
     // clEnqueueWriteBuffer here is already aligned to ensure that DMA is used
     // for the host-to-device transfer.
-    cl_event write_event[2];
+    cl_event write_event[1];
 	cl_event kernel_event,finish_event;
     status = clEnqueueWriteBuffer(queue, input_a_buf, CL_FALSE,
         0, N* sizeof(float), input_a, 0, NULL, &write_event[0]);
     checkError(status, "Failed to transfer input A");
 
-    status = clEnqueueWriteBuffer(queue, input_b_buf, CL_FALSE,
-        0, N* sizeof(float), input_b, 0, NULL, &write_event[1]);
-    checkError(status, "Failed to transfer input B");
+//    status = clEnqueueWriteBuffer(queue, input_b_buf, CL_FALSE,
+//        0, N* sizeof(float), input_b, 0, NULL, &write_event[1]);
+//    checkError(status, "Failed to transfer input B");
 
     // Set kernel arguments.
     unsigned argi = 0;
@@ -162,8 +163,8 @@ int status;
     status = clSetKernelArg(kernel, argi++, sizeof(cl_mem), &input_a_buf);
     checkError(status, "Failed to set argument 1");
 
-    status = clSetKernelArg(kernel, argi++, sizeof(cl_mem), &input_b_buf);
-    checkError(status, "Failed to set argument 2");
+//    status = clSetKernelArg(kernel, argi++, sizeof(cl_mem), &input_b_buf);
+//    checkError(status, "Failed to set argument 2");
 
     status = clSetKernelArg(kernel, argi++, sizeof(cl_mem), &output_buf);
     checkError(status, "Failed to set argument 3");
@@ -171,45 +172,44 @@ int status;
     const size_t global_work_size = N;
 //	const size_t group_size = 50;  // add a group size for calculate unit
 //	const size_t local_size = get_local_size(0);
-//	const size_t local_size = 100;	
+	const size_t local_size = 100;	
 
     status = clEnqueueNDRangeKernel(queue, kernel, 1, NULL,
-        &global_work_size, NULL, 2, write_event, &kernel_event);  // add 
+        &global_work_size, &local_size, 1, write_event, &kernel_event);  // add 
     checkError(status, "Failed to launch kernel");
-  
-  // Read the result. This the final operation.
+    // Read the result. This the final operation.
     status = clEnqueueReadBuffer(queue, output_buf, CL_TRUE,
-        0, N*sizeof(float), output, 1, &kernel_event, &finish_event);
+        0, sizeof(float), output, 1, &kernel_event, &finish_event);
 
 
    time (&end);
    diff = difftime (end,start);
    printf ("GPU took %.8lf seconds to run.\n", diff );
 // Verify results.
-bool pass = true;
+//bool pass = true;
 
-for(unsigned j = 0; j < N && pass; ++j) {
-      if(fabsf(output[j] - ref_output[j]) > 1.0e-5f) {
-        printf("Failed verification @ index %d\nOutput: %f\nReference: %f\n",
-            j, output[j], ref_output[j]);
-        pass = false;
-      }
-}
+//for(unsigned j = 0; j < N && pass; ++j) {
+//      if(fabsf(output[j] - ref_output[j]) > 1.0e-5f) {
+//        printf("Failed verification @ index %d\nOutput: %f\nReference: %f\n",
+//            j, output[j], ref_output[j]);
+//        pass = false;
+//      }
+//}
 	
-//	float sum = 0;
+	float sum = 0;
 //	for (int j=0; j<(int)group_size; j++) {
 //		sum += output[j];
 //	}
-//	sum = *output/N;
-	printf("the first element of output is %f", output[0]);
+	sum = *output/N;
+	printf("the output is %f", sum);
 
     // Release local events.
     clReleaseEvent(write_event[0]);
-    clReleaseEvent(write_event[1]);
+//    clReleaseEvent(write_event[1]);
 clReleaseKernel(kernel);
 clReleaseCommandQueue(queue);
 clReleaseMemObject(input_a_buf);
-clReleaseMemObject(input_b_buf);
+//clReleaseMemObject(input_b_buf);
 clReleaseMemObject(output_buf);
 clReleaseProgram(program);
 clReleaseContext(context);
